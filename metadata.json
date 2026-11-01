@@ -1,0 +1,7 @@
+{
+  "name": "NearWear",
+  "description": "Hyperlocal fashion & boutique discovery platform with real-time inventory, in-store try-on reservations, custom tailoring and community stylist orders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

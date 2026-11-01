@@ -1,0 +1,440 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+}
+
+enum ShopStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum OrderStatus {
+  PENDING_SELLER_CONFIRMATION
+  ACCEPTED
+  REJECTED
+  PROCESSING
+  PACKED
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  RETURN_REQUESTED
+  RETURN_APPROVED
+  RETURN_REJECTED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  COD
+  UPI
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum DeliveryType {
+  HOME_DELIVERY
+  STORE_PICKUP
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  passwordHash    String
+  name            String
+  phone           String?
+  role            String           @default("CUSTOMER") // CUSTOMER, SELLER, ADMIN
+  avatarUrl       String?
+  isActive        Boolean          @default(true)
+  customerProfile CustomerProfile?
+  sellerProfile   SellerProfile?
+  addresses       Address[]
+  orders          Order[]
+  cart            Cart?
+  wishlist        Wishlist?
+  reviews         Review[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model CustomerProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredArea       String?  @default("Rajarampuri, Kolhapur")
+  savedMeasurements   String?  // JSON
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model SellerProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessType     String   @default("Sole Proprietorship")
+  panNumber        String?
+  gstin            String?
+  bankAccountName  String?
+  bankAccountNumber String?
+  bankIfscCode     String?
+  verificationDoc  String?
+  shops            Shop[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Shop {
+  id                  String               @id @default(cuid())
+  sellerProfileId     String
+  sellerProfile       SellerProfile        @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  name                String
+  slug                String               @unique
+  description         String
+  category            String               // e.g. "Ethnic & Festive Wear", "Modern Casuals", "Handlooms & Paithani", "Men's Heritage & Suiting", "Footwear & Kolhapuri Chappals"
+  logoUrl             String
+  bannerUrl           String
+  phone               String
+  email               String
+  status              String               @default("APPROVED") // PENDING, UNDER_REVIEW, APPROVED, REJECTED, SUSPENDED
+  rejectionReason     String?
+  rating              Float                @default(4.8)
+  reviewCount         Int                  @default(0)
+  isFeatured          Boolean              @default(false)
+  
+  // Location & Address
+  streetAddress       String
+  area                String               // e.g. "Rajarampuri", "Shahupuri", "Laxmipuri", "Tarabai Park", "Mahadwar Road"
+  city                String               @default("Kolhapur")
+  state               String               @default("Maharashtra")
+  pincode             String               @default("416001")
+  latitude            Float                @default(16.7050)
+  longitude           Float                @default(74.2433)
+  
+  // Delivery & Pickup rules
+  deliveryRadiusKm    Float                @default(8.0)
+  minOrderValue       Float                @default(299.0)
+  baseDeliveryFee     Float                @default(40.0)
+  freeDeliveryAbove   Float                @default(999.0)
+  allowsStorePickup   Boolean              @default(true)
+  allowsHomeDelivery  Boolean              @default(true)
+  serviceablePincodes String               @default("[\"416001\",\"416002\",\"416003\",\"416004\",\"416008\",\"416012\"]") // JSON
+  openingHours        String               @default("Mon-Sat: 10:00 AM - 9:00 PM | Sun: 11:00 AM - 8:00 PM")
+
+  products            Product[]
+  sellerOrders        SellerOrder[]
+  reviews             Review[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  imageUrl    String
+  gender      String    @default("ALL") // MEN, WOMEN, KIDS, ALL
+  orderIndex  Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id             String           @id @default(cuid())
+  shopId         String
+  shop           Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  categoryId     String?
+  category       Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  title          String
+  slug           String
+  description    String
+  gender         String           @default("UNISEX") // MEN, WOMEN, KIDS, UNISEX
+  fabric         String?
+  brand          String?
+  price          Float            // Current Selling Price in INR
+  mrp            Float            // Maximum Retail Price
+  discountPct    Int              @default(0)
+  isFeatured     Boolean          @default(false)
+  isAvailable    Boolean          @default(true)
+  tags           String           @default("[]") // JSON
+  
+  images         ProductImage[]
+  variants       ProductVariant[]
+  orderItems     OrderItem[]
+  cartItems      CartItem[]
+  wishlistItems  WishlistItem[]
+  reviews        Review[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ProductVariant {
+  id                String       @id @default(cuid())
+  productId         String
+  product           Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size              String       // S, M, L, XL, 38, 40, etc.
+  color             String       // Navy Blue, Crimson, Gold, etc.
+  colorHex          String?      @default("#111827")
+  sku               String       @unique
+  price             Float?       // Override price if variant differs
+  inventory         Inventory?
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Inventory {
+  id             String         @id @default(cuid())
+  variantId      String         @unique
+  variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  totalQuantity  Int            @default(10)
+  reservedQuantity Int          @default(0)
+  availableQuantity Int         @default(10) // total - reserved
+  lowStockAlert  Int            @default(2)
+  updatedAt      DateTime       @updatedAt
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String   @default("Home") // Home, Work, Other
+  name       String
+  phone      String
+  street     String
+  area       String
+  city       String   @default("Kolhapur")
+  state      String   @default("Maharashtra")
+  pincode    String
+  landmark   String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id         String         @id @default(cuid())
+  cartId     String
+  cart       Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId  String
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity   Int            @default(1)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model Wishlist {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+  createdAt DateTime       @default(now())
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model Order {
+  id                  String        @id @default(cuid())
+  orderNumber         String        @unique // e.g. NW-2026-8910
+  userId              String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Delivery details
+  deliveryType        String        @default("HOME_DELIVERY") // HOME_DELIVERY, STORE_PICKUP
+  deliveryAddress     String?       // Serialized snapshot of delivery address
+  customerPhone       String
+  customerName        String
+  
+  // Financial breakdown (INR)
+  subtotalAmount      Float         // Items total
+  deliveryFeeTotal    Float         @default(0.0)
+  taxAmount           Float         @default(0.0)
+  discountAmount      Float         @default(0.0)
+  couponCode          String?
+  totalAmount         Float         // Final payable
+  
+  // Payment
+  paymentMethod       String        @default("COD") // COD, RAZORPAY, UPI
+  paymentStatus       String        @default("PENDING") // PENDING, CAPTURED, FAILED
+  razorpayOrderId     String?
+  razorpayPaymentId   String?
+  
+  // Child orders split by Shop
+  sellerOrders        SellerOrder[]
+  payments            Payment[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model SellerOrder {
+  id                 String       @id @default(cuid())
+  orderId            String
+  order              Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shopId             String
+  shop               Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  subOrderNumber     String       @unique // e.g. NW-2026-8910-S1
+  
+  status             String       @default("PENDING_SELLER_CONFIRMATION")
+  rejectionReason    String?
+  
+  // Shop-specific financial breakdown
+  shopSubtotal       Float
+  deliveryFee        Float        @default(0.0)
+  platformCommission Float        @default(0.0) // calculated based on rules
+  sellerPayable      Float        // shopSubtotal + deliveryFee - platformCommission
+  settlementStatus   String       @default("UNSETTLED") // UNSETTLED, SETTLED
+  
+  // Timestamps
+  acceptedAt         DateTime?
+  packedAt           DateTime?
+  deliveredAt        DateTime?
+  cancelledAt        DateTime?
+  
+  items              OrderItem[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model OrderItem {
+  id            String         @id @default(cuid())
+  sellerOrderId String
+  sellerOrder   SellerOrder    @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId     String
+  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  
+  title         String
+  size          String
+  color         String
+  quantity      Int            @default(1)
+  unitPrice     Float
+  totalPrice    Float
+  commissionPct Float          @default(10.0)
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount            Float
+  currency          String   @default("INR")
+  gateway           String   @default("RAZORPAY")
+  gatewayOrderId    String?
+  gatewayPaymentId  String?
+  signature         String?
+  status            String   @default("PENDING")
+  rawResponse       String?  // JSON
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model CommissionRule {
+  id           String   @id @default(cuid())
+  name         String
+  scope        String   @default("DEFAULT") // DEFAULT, CATEGORY, SHOP
+  targetId     String?  // ShopId or CategoryId
+  ratePercent  Float    @default(8.0) // e.g. 8%
+  minFee       Float    @default(10.0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model Coupon {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  description  String
+  discountType String    @default("PERCENT") // PERCENT, FIXED
+  value        Float     // e.g. 15% or 100 Rs
+  minOrderVal  Float     @default(499.0)
+  maxDiscount  Float?    @default(200.0)
+  isActive     Boolean   @default(true)
+  validUntil   DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopId      String
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  rating      Int      @default(5)
+  fitFeedback String   @default("TRUE_TO_SIZE") // RUNS_SMALL, TRUE_TO_SIZE, RUNS_LARGE
+  comment     String
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("ORDER") // ORDER, INVENTORY, PROMO, SYSTEM
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+}
